@@ -8,13 +8,12 @@ Datastore based on files written to and retrieved from a local filesystem.
 
 import os
 import datetime
-import logging
 import mimetypes
 from subprocess import Popen
 import warnings
-from ..compatibility import string_type
+from pathlib import Path
 from ..core import registry
-from .base import DataStore, DataKey, DataItem, IGNORE_DIGEST
+from .base import DataStore, DataItem, IGNORE_DIGEST
 
 
 class DataFile(DataItem):
@@ -22,25 +21,22 @@ class DataFile(DataItem):
     # current implementation just for real files
 
     def __init__(self, path, store):
-        self.path = path
-        self.full_path = os.path.join(store.root, path)
-        if os.path.exists(self.full_path):
-            stats = os.stat(self.full_path)
-            self.size = stats.st_size
+        self.path = Path(path)
+        self.full_path = Path(store.root) / self.path
+        if self.full_path.exists():
+            self.size = self.full_path.stat().st_size
         else:
             raise IOError("File %s does not exist" % self.full_path)
-            #self.size = None
-        self.name = os.path.basename(self.full_path)
-        self.extension = os.path.splitext(self.full_path)
-        self.mimetype, self.encoding = mimetypes.guess_type(self.full_path)
+        self.name = self.full_path.name
+        self.extension = self.full_path.suffix
+        self.mimetype, self.encoding = mimetypes.guess_type(self.full_path.as_posix())
 
     def get_content(self, max_length=None):
-        f = open(self.full_path, 'rb')
-        if max_length:
-            content = f.read(max_length)
-        else:
-            content = f.read()
-        f.close()
+        with self.full_path.open('rb') as f:
+            if max_length:
+                content = f.read(max_length)
+            else:
+                content = f.read()
         return content
     content = property(fget=get_content)
 
@@ -71,29 +67,29 @@ class FileSystemDataStore(DataStore):
     data_item_class = DataFile
 
     def __init__(self, root):
-        self.root = os.path.abspath(root or "./Data")
+        self.root = Path(root).absolute()
 
     def __str__(self):
-        return self.root
+        return self.root.as_posix()
 
     def __getstate__(self):
-        return {'root': self.root}
+        return {'root': self.root.as_posix()}
 
     def __setstate__(self, state):
         self.__init__(**state)
 
-    def __get_root(self):
+    @property
+    def root(self):
         return self._root
-    def __set_root(self, value):
-        if not isinstance(value, string_type):
-            raise TypeError("root must be a string")
-        self._root = value
-        if not os.path.exists(self._root):
+
+    @root.setter
+    def root(self, value):
+        self._root = Path(value)
+        if not self._root.exists():
             try:
-                os.makedirs(self._root)
+                self._root.mkdir(parents=True)
             except OSError:
                 pass  # should perhaps emit warning
-    root = property(fget=__get_root, fset=__set_root)
 
     def _find_new_data_files(self, timestamp, ignoredirs=[".smt", ".hg", ".svn", ".git", ".bzr"]):
         """Finds newly created/changed files in dataroot."""
@@ -104,18 +100,16 @@ class FileSystemDataStore(DataStore):
         # their own datastore, each with a different root.
         timestamp = timestamp.replace(microsecond=0)  # Round down to the nearest second
         # Find and add new data files
-        length_dataroot = len(self.root) + len(os.path.sep)
         new_files = []
-        for root, dirs, files in os.walk(self.root):
+        for root, dirs, files in os.walk(self.root.as_posix()):
             for igdir in ignoredirs:
                 if igdir in dirs:
                     dirs.remove(igdir)
             for file in files:
-                full_path = os.path.join(root, file)
-                relative_path = os.path.join(root[length_dataroot:],file)
-                last_modified = datetime.datetime.fromtimestamp(os.stat(full_path).st_mtime)
+                full_path = Path(root) / file
+                last_modified = datetime.datetime.fromtimestamp(full_path.stat().st_mtime)
                 if last_modified >= timestamp:
-                    new_files.append(relative_path)
+                    new_files.append(full_path)
         return new_files
 
     def find_new_data(self, timestamp):
@@ -145,10 +139,10 @@ class FileSystemDataStore(DataStore):
             except KeyError:
                 warnings.warn("Tried to delete %s, but it did not exist." % key)
             else:
-                os.remove(data_item.full_path)
+                Path(data_item.full_path).unlink()
 
     def contains_path(self, path):
-        return os.path.isfile(os.path.join(self.root, path))
+        return (self.root / path).is_file()
 
 
 registry.register(FileSystemDataStore)

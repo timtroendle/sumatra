@@ -8,6 +8,7 @@ import shutil
 import os
 import datetime
 import hashlib
+from pathlib import Path
 from sumatra.datastore import FileSystemDataStore, ArchivingFileSystemDataStore, get_data_store, DataKey
 from sumatra.datastore.base import DataStore
 from sumatra.datastore.filesystem import DataFile
@@ -17,31 +18,34 @@ from sumatra.core import TIMESTAMP_FORMAT
 class TestFileSystemDataStore(unittest.TestCase):
 
     def setUp(self):
-        self.root_dir = os.path.abspath('kusehgcfscuzhfqizuchgsireugvcsi')
-        if os.path.exists(self.root_dir):
-            shutil.rmtree(self.root_dir)
-        assert not os.path.exists(self.root_dir)
+        self.root_dir = Path('kusehgcfscuzhfqizuchgsireugvcsi').absolute()
+        if self.root_dir.exists():
+            shutil.rmtree(self.root_dir.as_posix())
+        assert not self.root_dir.exists()
         self.ds = FileSystemDataStore(self.root_dir)
         self.now = datetime.datetime.now()
-        os.mkdir(os.path.join(self.root_dir, 'test_dir'))
-        self.test_files = set(['test_file1', 'test_file2', 'test_dir/test_file3'])
+        test_dir = self.root_dir / 'test_dir'
+        test_dir.mkdir(parents=True)
+        self.test_files = set([self.root_dir / 'test_file1',
+                               self.root_dir / 'test_file2',
+                               test_dir / 'test_file3'])
         self.test_data = b'licgsnireugcsenrigucsic\ncrgqgjch,kgch'
-        for filename in self.test_files:
-            with open(os.path.join(self.root_dir, filename), 'wb') as f:
+        for path in self.test_files:
+            with path.open('wb') as f:
                 f.write(self.test_data)
 
     def tearDown(self):
-        shutil.rmtree(self.root_dir)
+        shutil.rmtree(self.root_dir.as_posix())
         del self.ds
 
     def test__init__should_create_root_if_it_doesnt_exist(self):
-        self.assert_(os.path.exists(self.root_dir))
+        self.assert_(self.root_dir.exists())
 
     def test__str__should_return_root(self):
-        self.assertEqual(str(self.ds), self.root_dir)
+        self.assertEqual(str(self.ds), self.root_dir.as_posix())
 
     def test__get_state__should_return_dict_containing_root(self):
-        self.assertEqual(self.ds.__getstate__(), {'root': self.root_dir})
+        self.assertEqual(self.ds.__getstate__(), {'root': self.root_dir.as_posix()})
 
     def test__find_new_data__should_return_list_of_keys_matching_new_files(self):
         self.assertEqual(set(key.path for key in self.ds.find_new_data(self.now)),
@@ -65,11 +69,12 @@ class TestFileSystemDataStore(unittest.TestCase):
         self.assertEqual(content, self.test_data[:10])
 
     def test__delete__should_remove_files(self):
-        assert os.path.exists(os.path.join(self.root_dir, 'test_file1'))
+        file1 = self.root_dir / 'test_file1'
+        assert file1.exists()
         digest = hashlib.sha1(self.test_data).hexdigest()
         keys = [DataKey(path, digest) for path in self.test_files]
         self.ds.delete(*keys)
-        self.assert_(not os.path.exists(os.path.join(self.root_dir, 'test_file1')))
+        self.assert_(not file1.exists())
 
 
 class TestArchivingFileSystemDataStore(unittest.TestCase):
@@ -148,20 +153,20 @@ class MockDataStore(object):
 class TestDataFile(unittest.TestCase):
 
     def setUp(self):
-        self.test_file = 'test_file1'
+        self.test_file = Path('test_file1')
         self.test_data = b'licgsnireugcsenrigucsic\ncrgqgjch,kgch'
-        with open(self.test_file, 'wb') as f:
+        with self.test_file.open('wb') as f:
             f.write(self.test_data)
         self.data_file = DataFile(self.test_file, MockDataStore())
 
     def tearDown(self):
-        os.remove(self.test_file)
+        self.test_file.unlink()
 
     def test_init(self):
         pass
 
     def test_str__should_return_path(self):
-        self.assertEqual(str(self.data_file), self.data_file.path)
+        self.assertEqual(str(self.data_file), self.data_file.path.as_posix())
 
     def test_content(self):
         self.assertEqual(self.data_file.content, self.test_data)
@@ -169,24 +174,26 @@ class TestDataFile(unittest.TestCase):
     def test_sorted_content(self):
         self.assertEqual(self.data_file.sorted_content,
                          b'crgqgjch,kgch\nlicgsnireugcsenrigucsic')
-        os.remove("%s,sorted" % self.test_file)
+        self.test_file.with_name(self.test_file.name + ',sorted').unlink()
 
     def test_eq(self):
         same_data_file = DataFile(self.test_file, MockDataStore())
         self.assertEqual(self.data_file, same_data_file)
-        with open("test_file2", 'wb') as f:
+        test_file2 = Path('test_file2')
+        with test_file2.open('wb') as f:
             f.write(self.data_file.sorted_content)
-        sorted_data_file = DataFile("test_file2", MockDataStore())
+        sorted_data_file = DataFile(test_file2, MockDataStore())
         self.assertEqual(self.data_file, sorted_data_file)
-        os.remove("test_file2")
-        os.remove("test_file2,sorted")
+        test_file2.unlink()
+        test_file2.with_name(test_file2.name + ',sorted').unlink()
 
     def test_ne(self):
-        with open("test_file3", "w") as f:
-            f.write("ucyfgnauygfcangf\niauff\ngiurg\n")
-        other_data_file = DataFile("test_file3", MockDataStore())
+        test_file3 = Path('test_file3')
+        with test_file3.open("wb") as f:
+            f.write(b"ucyfgnauygfcangf\niauff\ngiurg\n")
+        other_data_file = DataFile(test_file3, MockDataStore())
         self.assertNotEqual(self.data_file, other_data_file)
-        os.remove("test_file3")
+        test_file3.unlink()
 
 
 class TestModuleFunctions(unittest.TestCase):

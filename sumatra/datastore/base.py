@@ -6,7 +6,7 @@
 """
 
 import hashlib
-import os.path
+from pathlib import Path
 from ..core import registry
 
 IGNORE_DIGEST = "0"*40
@@ -76,7 +76,7 @@ class DataKey(object):
     """
 
     def __init__(self, path, digest, **metadata):
-        self.path = path
+        self.path = Path(path)
         self.digest = digest
         self.metadata = metadata
 
@@ -94,7 +94,7 @@ class DataItem(object):
     """Base class for data item classes, that may represent files or database records."""
 
     def __str__(self):
-        return self.path
+        return str(self.path)
 
     @property
     def digest(self):
@@ -140,13 +140,12 @@ class DataItem(object):
 
         Return the full path of the final file.
         """
-        if os.path.isdir(path):
-            full_path = os.path.join(path, self.path)
+        path = Path(path)
+        if path.is_dir():
+            full_path = path / self.path
         else:
             full_path = path
-        dir = os.path.dirname(full_path)
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-        with open(full_path, "w") as fp:
+        full_path.mkdir(parents=True)
+        with full_path.open("w") as fp:
             fp.write(self.content)
         return full_path
