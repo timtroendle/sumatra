@@ -119,8 +119,8 @@ class MockProject(object):
 class TestTextFormatter(unittest.TestCase):
 
     def setUp(self):
-        self.record_list = [ MockRecord(), MockRecord() ]
-        self.record_tuple = ( MockRecord(), MockRecord() )
+        self.record_list = [MockRecord(), MockRecord(), MockRecord("Ûníçödê")]
+        self.record_tuple = (MockRecord(), MockRecord(), MockRecord("Ûníçödê"))
 
     def test__init__should_accept_an_iterable_containing_records(self):
         tf1 = TextFormatter(self.record_list)
@@ -145,7 +145,7 @@ class TestTextFormatter(unittest.TestCase):
         tf1 = TextFormatter(self.record_list)
         txt = tf1.long()
         lengths = [len(line) for line in txt.split("\n")]
-        self.assert_(max(lengths)  <= 80)
+        self.assert_(max(lengths) <= 80)
 
     def test__table__should_return_a_constant_width_string(self):
         tf1 = TextFormatter(self.record_list)
@@ -158,7 +158,7 @@ class TestTextFormatter(unittest.TestCase):
 class TestShellFormatter(unittest.TestCase):
 
     def setUp(self):
-        self.record_list = [ MockRecord(), MockRecord() ]
+        self.record_list = [MockRecord(), MockRecord(), MockRecord("Ûníçödê")]
 
     def tearDown(self):
         for filename in glob.glob("*.patch"):
@@ -168,7 +168,7 @@ class TestShellFormatter(unittest.TestCase):
         tf1 = ShellFormatter(self.record_list, project=MockProject())
         txt = tf1.short()
         tmpdir = tempfile.mkdtemp()
-        with open(os.path.join(tmpdir,"test.sh"), "w") as fp:
+        with open(os.path.join(tmpdir, "test.sh"), "w", encoding='utf-8') as fp:
             fp.write(txt)
         returncode, stdout, stderr = run(["sh", "-n", "test.sh"], cwd=tmpdir)  # check syntax
         self.assertEqual(returncode, 0)
@@ -178,14 +178,14 @@ class TestShellFormatter(unittest.TestCase):
 class TestLaTeXFormatter(unittest.TestCase):
 
     def setUp(self):
-        self.record_list = [ MockRecord(), MockRecord("nobel_prize") ]
+        self.record_list = [MockRecord(), MockRecord("nobel_prize"), MockRecord("Ûníçödê")]
         # note that label with underscore should be escaped in LaTeX output
 
     def test__long(self):
         tf1 = LaTeXFormatter(self.record_list, project=MockProject())
         txt = tf1.long()
         tmpdir = tempfile.mkdtemp()
-        with open(os.path.join(tmpdir, "test.tex"), "w") as fp:
+        with open(os.path.join(tmpdir, "test.tex"), "w", encoding='utf-8') as fp:
             fp.write(txt)
         if get_executable("pdflatex").path == "pdflatex":  # pdflatex not found
             raise unittest.SkipTest
@@ -203,8 +203,8 @@ class TestLaTeXFormatter(unittest.TestCase):
 class TestHTMLFormatter(unittest.TestCase):
 
     def setUp(self):
-        self.record_list = [ MockRecord(), MockRecord() ]
-        self.record_tuple = ( MockRecord(), MockRecord() )
+        self.record_list = [MockRecord(), MockRecord("Ûníçödê")]
+        self.record_tuple = (MockRecord(), MockRecord("Ûníçödê"))
 
     def test__short__should_return_an_unordered_list(self):
         hf1 = HTMLFormatter(self.record_list)
@@ -243,7 +243,6 @@ class TestTextDiffFormatter(unittest.TestCase):
 
     def test__long(self):
         txt = self.df.long()
-
 
 
 class TestModuleFunctions(unittest.TestCase):
